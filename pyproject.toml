@@ -77,6 +77,8 @@ max-args = 6
 
 [tool.mypy]
 python_version = "3.14"
+# Type-check the CI platform regardless of developer OS so Linux-only failures surface locally.
+platform = "linux"
 strict = true
 warn_unreachable = true
 files = ["src", "tests"]

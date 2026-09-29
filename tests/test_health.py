@@ -121,8 +121,15 @@ def test_no_other_path_is_exposed(path: str) -> None:
     assert "location" not in response.headers
 
 
-@pytest.mark.parametrize("method", ["POST", "PUT", "PATCH", "DELETE"])
+@pytest.mark.parametrize("method", ["HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"])
 @pytest.mark.parametrize("path", [LIVE, READY])
 def test_health_paths_accept_only_get(method: str, path: str) -> None:
+    """GET only, as in the api reference (Ktor ``get`` without auto-HEAD).
+
+    Serving HEAD or OPTIONS would be a deliberate shared-contract change made
+    with the api and platform probe owners, not an accident of the framework.
+    """
     with TestClient(create_app()) as client:
-        assert client.request(method, path).status_code == 405
+        response = client.request(method, path)
+    assert response.status_code == 405
+    assert response.headers["allow"] == "GET"

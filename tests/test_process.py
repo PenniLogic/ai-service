@@ -36,7 +36,11 @@ def child_environment(**overrides: str) -> dict[str, str]:
 
 
 def launch(environment: dict[str, str]) -> subprocess.Popen[str]:
-    creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
+    # Statement form on purpose: mypy prunes sys.platform branches only for if-statements,
+    # and typeshed declares CREATE_NEW_PROCESS_GROUP under win32 alone.
+    creationflags = 0
+    if sys.platform == "win32":
+        creationflags = subprocess.CREATE_NEW_PROCESS_GROUP
     return subprocess.Popen(
         [sys.executable, "-m", "ai_service"],
         cwd=ROOT,
@@ -104,12 +108,9 @@ def graceful_stop_exit_codes() -> frozenset[int]:
     end it: killed by SIGTERM on POSIX (negative status from ``Popen``), exit status 3
     from the C runtime's default SIGBREAK disposition on Windows.
     """
-    windows_sigbreak_exit_status = 3
-    posix_sigterm_exit_status = -int(signal.SIGTERM)
-    # A conditional expression keeps both branches type-checked on every platform.
-    return frozenset(
-        {windows_sigbreak_exit_status if sys.platform == "win32" else posix_sigterm_exit_status}
-    )
+    if sys.platform == "win32":
+        return frozenset({3})
+    return frozenset({-int(signal.SIGTERM)})
 
 
 def log_events(output: str) -> list[dict[str, object]]:
@@ -177,6 +178,7 @@ def serve_and_stop(extra_environment: dict[str, str]) -> tuple[int, str, int]:
         assert request(port, "GET", "/")[0] == 404
         assert request(port, "GET", "/openapi.json")[0] == 404
         assert request(port, "POST", "/health/ready")[0] == 405
+        assert request(port, "HEAD", "/health/live")[0] == 405
 
         request_graceful_stop(process)
         output = finish(process)

@@ -25,7 +25,7 @@ first, then applied to both repositories; it is not made here unilaterally.
 | `GET /health/ready` | lifespan startup completed, shutdown not begun | `200` | `{"status":"ready"}` |
 | `GET /health/ready` | before startup completes or after shutdown begins | `503` | `{"status":"not_ready"}` |
 | any other path, including trailing-slash variants (no redirect) | — | `404` | engine default |
-| other methods on the health paths | — | `405` | engine default |
+| other methods on the health paths, including `HEAD` and `OPTIONS` | — | `405` with `Allow: GET` | engine default |
 
 Every health response carries `Content-Type: application/json` and
 `Cache-Control: no-store`, and no `Server` header is sent. Bodies are fixed
