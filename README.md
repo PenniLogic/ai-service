@@ -3,7 +3,7 @@
 
 Backend AI routing and explanations; no client raw-message ingestion.
 
-**Status:** Repository foundation only. The previous unmerged scaffold is retained in PenniLogic-old, not accepted here.
+**Status:** Repository foundation plus the health-only AI service scaffold from PenniLogic/ai-service#1; no provider traffic, key handling or inference is implemented.
 
 This repository belongs to the new public, Free-plan `PenniLogic` organization.
 `migration-source.json` records the pinned source snapshot and excluded history.
@@ -15,7 +15,16 @@ The old private repositories, unmerged branches and discussions remain in
 ```text
 python scripts/setup.py
 python scripts/check_repository.py
+python -m pip install --quiet "uv>=0.11,<0.12"
+uv sync --locked
+uv run --locked ruff check .
+uv run --locked ruff format --check .
+uv run --locked mypy
+uv run --locked pytest
 ```
+
+Repository-specific setup, commands and troubleshooting are maintained by hand in
+[docs/development.md](docs/development.md); that guide is not generated.
 
 See [AGENTS.md](AGENTS.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
 Product specifications and the preserved backlog are in
