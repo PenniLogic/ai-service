@@ -8,7 +8,7 @@ Install Python 3.14, Git, then run:
 ```text
 python scripts/setup.py
 python scripts/check_repository.py
-python -m pip install --quiet "uv>=0.11,<0.12"
+printf 'uv==0.11.33 --hash=sha256:9542178978b0b6f16a7ae99e55aca039f493a1edb373a15d7993eab80a28615a\n' | python -m pip install --quiet --only-binary :all: --require-hashes --no-deps -r /dev/stdin
 uv sync --locked
 uv run --locked ruff check .
 uv run --locked ruff format --check .
