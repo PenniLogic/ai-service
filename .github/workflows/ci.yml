@@ -43,7 +43,7 @@
         },
         {
           "name": "Run checks",
-          "run": "python scripts/check_repository.py"
+          "run": "python scripts/check_repository.py\npython -m pip install --quiet \"uv>=0.11,<0.12\"\nuv sync --locked\nuv run --locked ruff check .\nuv run --locked ruff format --check .\nuv run --locked mypy\nuv run --locked pytest"
         }
       ]
     }

@@ -12,3 +12,8 @@ node_modules/
 coverage/
 .idea/
 .DS_Store
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+dist/
+*.egg-info/
