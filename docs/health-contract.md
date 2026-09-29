@@ -39,22 +39,43 @@ in-flight requests drain (bounded by the graceful shutdown timeout).
 
 ## Lifecycle log events
 
-One JSON object per line on standard error, mirroring the api scaffold. Only event
-names, readiness states and configuration *key names* appear; configuration values
-are never logged.
+One JSON object per line. Only event names, readiness states, configuration *key
+names*, integer error numbers and exception type names appear; configuration values
+are never logged. The ai-service writes these lines to **standard error**, whereas
+the api scaffold logs to standard output; collectors must capture both streams.
+
+Events shared with the api scaffold (same names and fields):
 
 ```text
 {"event":"configuration_invalid","key":"APP_ENV"}
 {"event":"startup"}
-{"event":"bind_failed","errno":98}
 {"event":"readiness","status":"ready"}
 {"event":"readiness","status":"not_ready"}
 ```
+
+Additive events emitted only by the ai-service (not part of the api's log vocabulary):
+
+```text
+{"event":"bind_failed","errno":98}
+{"event":"engine_failure","exception":"RuntimeError"}
+{"event":"message","logger":"uvicorn.error","level":"WARNING","message":"..."}
+```
+
+`bind_failed` reports the listener's `errno` only. `engine_failure` is the last-resort
+boundary for an unexpected engine exception: it carries the exception type name and
+replaces the traceback that would otherwise echo paths and values. `message` wraps
+engine warnings and errors, keeping only the first line of the text.
+
+The engine's own environment-derived options are pinned in code (`workers=1`,
+`proxy_headers=False`, no forwarded-IP allowlist), so `WEB_CONCURRENCY` and
+`FORWARDED_ALLOW_IPS` in the process environment are ignored rather than read; the
+validated settings allowlist is the only configuration source.
 
 ## Automated evidence
 
 - `tests/test_health.py` asserts the exact bodies, status codes and headers, validates
   every body against the schema copy, and pins the schema copy's content.
 - `tests/test_process.py` starts the real `python -m ai_service` process and asserts
-  the same contract over a socket, that no `Server` header is sent, and that the
-  startup log consists solely of the events above.
+  the same contract over a socket, that no `Server` header is sent, that the startup
+  log consists solely of the events above, and that garbage `WEB_CONCURRENCY` /
+  `FORWARDED_ALLOW_IPS` values change nothing and are never echoed.

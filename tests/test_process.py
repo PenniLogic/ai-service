@@ -19,6 +19,8 @@ STARTUP_DEADLINE_SECONDS = 30.0
 EXIT_DEADLINE_SECONDS = 30.0
 POLL_INTERVAL_SECONDS = 0.1
 CONFIGURATION_KEYS = ("APP_ENV", "HOST", "PORT")
+# Environment variables the engine would otherwise read on its own, outside the allowlist.
+ENGINE_ENVIRONMENT_KEYS = ("WEB_CONCURRENCY", "FORWARDED_ALLOW_IPS")
 
 
 def free_port() -> int:
@@ -27,7 +29,8 @@ def free_port() -> int:
 
 
 def child_environment(**overrides: str) -> dict[str, str]:
-    environment = {k: v for k, v in os.environ.items() if k not in CONFIGURATION_KEYS}
+    excluded = CONFIGURATION_KEYS + ENGINE_ENVIRONMENT_KEYS
+    environment = {k: v for k, v in os.environ.items() if k not in excluded}
     environment.update(overrides)
     return environment
 
@@ -147,9 +150,15 @@ def test_real_entrypoint_fails_closed_when_the_port_is_taken() -> None:
     assert "127.0.0.1" not in output
 
 
-def test_real_entrypoint_serves_the_shared_health_contract_and_logs_no_values() -> None:
+def serve_and_stop(extra_environment: dict[str, str]) -> tuple[int, str, int]:
+    """Start the real process with ``extra_environment``, exercise the contract, stop it.
+
+    Returns the exit status, everything the process wrote and the port used.
+    """
     port = free_port()
-    process = launch(child_environment(APP_ENV="test", HOST="127.0.0.1", PORT=str(port)))
+    environment = child_environment(APP_ENV="test", HOST="127.0.0.1", PORT=str(port))
+    environment.update(extra_environment)
+    process = launch(environment)
     try:
         wait_until_ready(process, port)
 
@@ -175,8 +184,11 @@ def test_real_entrypoint_serves_the_shared_health_contract_and_logs_no_values() 
         if process.poll() is None:
             process.kill()
             process.wait(timeout=EXIT_DEADLINE_SECONDS)
+    return process.returncode, output, port
 
-    assert process.returncode in graceful_stop_exit_codes(), output
+
+def assert_clean_lifecycle(returncode: int, output: str, port: int) -> None:
+    assert returncode in graceful_stop_exit_codes(), output
     assert "Traceback" not in output
     assert log_events(output) == [
         {"event": "startup"},
@@ -185,3 +197,24 @@ def test_real_entrypoint_serves_the_shared_health_contract_and_logs_no_values() 
     ]
     assert str(port) not in output
     assert "127.0.0.1" not in output
+
+
+def test_real_entrypoint_serves_the_shared_health_contract_and_logs_no_values() -> None:
+    returncode, output, port = serve_and_stop({})
+    assert_clean_lifecycle(returncode, output, port)
+
+
+def test_real_entrypoint_ignores_engine_environment_overrides_and_never_echoes_them() -> None:
+    """Regression for review finding S1 (PR #15).
+
+    uvicorn reads WEB_CONCURRENCY and FORWARDED_ALLOW_IPS itself unless they are
+    pinned; a garbage value used to escape as a raw traceback echoing the value.
+    """
+    garbage = {
+        "WEB_CONCURRENCY": "synthetic-garbage-c0ffee",
+        "FORWARDED_ALLOW_IPS": "synthetic-forwarded-value-d00d",
+    }
+    returncode, output, port = serve_and_stop(garbage)
+    assert_clean_lifecycle(returncode, output, port)
+    for value in garbage.values():
+        assert value not in output

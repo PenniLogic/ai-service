@@ -64,14 +64,22 @@ mirror the core API scaffold so both services are deployed the same way.
 There are no provider, model or credential settings. Keep it that way until the
 AI harness epic introduces them behind their own reviewed contract.
 
+These three variables are the only ones read. The engine's own environment lookups
+(`WEB_CONCURRENCY`, `FORWARDED_ALLOW_IPS`) are disabled by pinning `workers=1` and
+`proxy_headers=False` in code, so setting them has no effect and their values are
+never parsed or echoed. Trusting proxy headers is a deployment decision to be made
+with the platform owners when the service runs behind a reviewed proxy.
+
 ## Observability
 
-Lifecycle events are structured JSON lines on standard error; see
-[`docs/health-contract.md`](health-contract.md). Engine (uvicorn) informational
-output, which would include the bind address, is suppressed; engine warnings and
-errors are wrapped as `{"event":"message",...}` lines that keep only the first line
-of the message and, for attached exceptions, only the exception type name. No
-timestamps are emitted by the process; the log collector stamps lines.
+Lifecycle events are structured JSON lines on standard error (the api scaffold
+uses standard output); see [`docs/health-contract.md`](health-contract.md). Engine
+(uvicorn) informational output, which would include the bind address, is
+suppressed; engine warnings and errors are wrapped as `{"event":"message",...}` lines
+that keep only the first line of the message and, for attached exceptions, only the
+exception type name. An unexpected engine exception ends the process with exit code
+1 and a single `{"event":"engine_failure","exception":"<TypeName>"}` line instead of
+a traceback. No timestamps are emitted by the process; the log collector stamps lines.
 
 ## Rollout and rollback
 

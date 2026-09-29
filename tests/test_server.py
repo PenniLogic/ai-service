@@ -8,7 +8,15 @@ import socket
 
 import pytest
 
-from ai_service.server import EXIT_FAILURE, EXIT_OK, run, serve_forever
+from ai_service.app import create_app
+from ai_service.server import (
+    EXIT_FAILURE,
+    EXIT_OK,
+    GRACEFUL_SHUTDOWN_SECONDS,
+    engine_config,
+    run,
+    serve_forever,
+)
 from ai_service.settings import Settings
 from ai_service.structured_logging import configure_logging
 
@@ -61,12 +69,35 @@ def test_engine_exit_code_is_propagated() -> None:
     assert run({"APP_ENV": "test"}, serve=lambda _: 7, log_stream=io.StringIO()) == 7
 
 
-def test_engine_failure_is_not_disguised_as_a_successful_launch() -> None:
-    def serve(_: Settings) -> int:
-        raise RuntimeError("synthetic engine startup failure")
+def test_engine_failure_is_reported_structurally_without_a_traceback() -> None:
+    stream = io.StringIO()
+    sentinel = "synthetic-engine-failure-detail-c0ffee"
 
-    with pytest.raises(RuntimeError, match="synthetic engine startup failure"):
-        run({"APP_ENV": "test"}, serve=serve, log_stream=io.StringIO())
+    def serve(_: Settings) -> int:
+        raise RuntimeError(sentinel)
+
+    assert run({"APP_ENV": "test"}, serve=serve, log_stream=stream) == EXIT_FAILURE
+    assert events(stream) == [
+        {"event": "startup"},
+        {"event": "engine_failure", "exception": "RuntimeError"},
+    ]
+    assert sentinel not in stream.getvalue()
+    assert "Traceback" not in stream.getvalue()
+
+
+def test_engine_configuration_ignores_uvicorn_environment_overrides(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("WEB_CONCURRENCY", "synthetic-garbage-c0ffee")
+    monkeypatch.setenv("FORWARDED_ALLOW_IPS", "*")
+    config = engine_config(create_app())
+    assert config.workers == 1
+    assert config.proxy_headers is False
+    assert config.forwarded_allow_ips == []
+    assert config.server_header is False
+    assert config.access_log is False
+    assert config.lifespan == "on"
+    assert config.timeout_graceful_shutdown == GRACEFUL_SHUTDOWN_SECONDS
 
 
 def test_bind_failure_fails_closed_without_logging_the_address() -> None:
